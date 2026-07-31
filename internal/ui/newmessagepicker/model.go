@@ -25,13 +25,37 @@ type User struct {
 	Username    string
 	IsExternal  bool
 	Recency     int64
+	// IsExisting marks a synthetic row for an already-open DM or group
+	// DM rather than a person to invite. ID holds the conversation's
+	// channel ID (not a user ID) in this case. These rows exist so an
+	// existing conversation can be found and reopened by name — without
+	// them, a user has no way to search for "my group with X, Y, Z" and
+	// must instead reconstruct the exact member set from memory (the
+	// only other path back to it is the fuzzy channel finder, which
+	// itself only lists conversations the staleness filter hasn't
+	// already hidden). See UX_AUDIT.md #3. Existing rows are select-only
+	// (Enter reopens immediately) and cannot be combined into the pill
+	// bar with other recipients — toggleHighlightedSelection no-ops on
+	// them.
+	IsExisting bool
+	// ConvType is the existing conversation's type ("dm" or
+	// "group_dm"), only meaningful when IsExisting is true.
+	ConvType string
 }
 
 // Result is returned by HandleKey when the user submits the picker.
-// UserIDs is the list of recipients to pass to conversations.open;
-// it always contains at least one ID when non-nil.
+//
+// UserIDs is set when the user picked one or more people to open a new
+// (or Slack-deduped-existing, via conversations.open) DM/MPIM with.
+//
+// ExistingChannelID/ExistingType are set instead when the user picked
+// an IsExisting row: the caller should switch straight to that channel
+// rather than round-tripping through conversations.open. Exactly one
+// of UserIDs or ExistingChannelID is populated.
 type Result struct {
-	UserIDs []string
+	UserIDs           []string
+	ExistingChannelID string
+	ExistingType      string
 }
 
 // Model is the picker's state. Constructed with New() and held on the
@@ -213,6 +237,11 @@ func (m *Model) toggleHighlightedSelection() {
 	if m.highlight < 0 || m.highlight >= len(m.filtered) {
 		return
 	}
+	if m.users[m.filtered[m.highlight]].IsExisting {
+		// Existing conversations aren't recipients to accumulate in the
+		// pill bar alongside others — Enter reopens them directly.
+		return
+	}
 	userID := m.users[m.filtered[m.highlight]].ID
 	if _, already := m.selected[userID]; already {
 		delete(m.selected, userID)
@@ -283,5 +312,9 @@ func (m *Model) submit() *Result {
 	if m.highlight < 0 || m.highlight >= len(m.filtered) {
 		return nil
 	}
-	return &Result{UserIDs: []string{m.users[m.filtered[m.highlight]].ID}}
+	u := m.users[m.filtered[m.highlight]]
+	if u.IsExisting {
+		return &Result{ExistingChannelID: u.ID, ExistingType: u.ConvType}
+	}
+	return &Result{UserIDs: []string{u.ID}}
 }

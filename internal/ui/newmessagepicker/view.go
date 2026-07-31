@@ -191,6 +191,9 @@ func (m Model) renderRow(u User, width int, highlight bool, bg color.Color) stri
 	if u.IsExternal {
 		name += " [ext]"
 	}
+	if u.IsExisting {
+		name += " [open]"
+	}
 
 	handle := ""
 	if u.Username != "" && u.Username != u.DisplayName {

@@ -13,15 +13,15 @@ import (
 )
 
 type Config struct {
-	General       General                      `toml:"general"`
-	Appearance    Appearance                   `toml:"appearance"`
-	Animations    Animations                   `toml:"animations"`
-	Notifications Notifications                `toml:"notifications"`
-	Cache         CacheConfig                  `toml:"cache"`
-	Sidebar       Sidebar                      `toml:"sidebar"`
-	Sections      map[string]SectionDef        `toml:"sections"`
-	Theme         Theme                        `toml:"theme"`
-	Workspaces    map[string]Workspace         `toml:"workspaces"`
+	General       General               `toml:"general"`
+	Appearance    Appearance            `toml:"appearance"`
+	Animations    Animations            `toml:"animations"`
+	Notifications Notifications         `toml:"notifications"`
+	Cache         CacheConfig           `toml:"cache"`
+	Sidebar       Sidebar               `toml:"sidebar"`
+	Sections      map[string]SectionDef `toml:"sections"`
+	Theme         Theme                 `toml:"theme"`
+	Workspaces    map[string]Workspace  `toml:"workspaces"`
 }
 
 // SectionDef defines a sidebar section with channel name patterns.
@@ -210,7 +210,13 @@ func Default() Config {
 			MaxImageCacheMB:      200,
 		},
 		Sidebar: Sidebar{
-			HideInactiveAfterDays: 30,
+			// Default is 0 (disabled). At threshold>0, dm/group_dm items
+			// with an empty last_read_ts (Slack's "closed conversation"
+			// signal — roughly half of a user's DMs and 98% of mpdms in
+			// real workspaces, per IsStale's doc comment) are hidden
+			// unconditionally, which reads as "DMs silently vanished from
+			// the sidebar" to anyone who hasn't opted in. See UX_AUDIT.md #1.
+			HideInactiveAfterDays: 0,
 		},
 	}
 }

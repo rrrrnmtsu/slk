@@ -2298,6 +2298,23 @@ func (a *App) seedNewMessagePicker() {
 		})
 	}
 
+	// Existing DM/group DM rows so the picker doubles as a way to find
+	// and reopen a conversation by name — sourced from AllItems (not
+	// VisibleItems) specifically so conversations the staleness filter
+	// has hidden from the sidebar are still reachable here. See
+	// UX_AUDIT.md #3.
+	for _, item := range a.sidebar.AllItems() {
+		if item.Type != "dm" && item.Type != "group_dm" {
+			continue
+		}
+		users = append(users, newmessagepicker.User{
+			ID:          item.ID,
+			DisplayName: item.Name,
+			IsExisting:  true,
+			ConvType:    item.Type,
+		})
+	}
+
 	a.newMessagePicker.SetCurrentUserID(a.currentUserID)
 	a.newMessagePicker.SetUsers(users)
 }

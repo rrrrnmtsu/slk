@@ -33,6 +33,16 @@ func handleNewMessageMode(a *App, msg tea.KeyMsg) tea.Cmd {
 
 	result := a.newMessagePicker.HandleKey(keyStr)
 	if result != nil {
+		if result.ExistingChannelID != "" {
+			// Picked an already-open conversation row: switch straight
+			// to it, no conversations.open round trip needed — we
+			// already know the channel ID. See UX_AUDIT.md #3.
+			a.newMessagePicker.Close()
+			a.SetMode(ModeInsert)
+			channelID, channelType := result.ExistingChannelID, result.ExistingType
+			emitSelected := func() tea.Msg { return ChannelSelectedMsg{ID: channelID, Type: channelType} }
+			return tea.Batch(emitSelected, a.compose.Focus())
+		}
 		// Submit. Bump the in-flight ID and clear cancellation
 		// before dispatch so a fresh result is honored.
 		a.newMessageInFlightID++

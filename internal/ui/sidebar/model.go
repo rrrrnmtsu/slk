@@ -238,6 +238,12 @@ type Model struct {
 	// is injectable for deterministic tests; defaults to time.Now.
 	staleThreshold time.Duration
 	activeID       string
+	// hiddenStaleCount is how many items rebuildFilter dropped via
+	// IsStale on the last pass (search-filter mismatches don't count).
+	// buildCache surfaces this so an all-hidden section reads as
+	// "N hidden by hide_inactive_after_days" instead of silently
+	// vanishing. See UX_AUDIT.md #1.
+	hiddenStaleCount int
 	// threadsActive reports that the Threads view is the currently
 	// displayed view in the message pane. When true (and the cursor
 	// is on a different row), the synthetic Threads row renders with
@@ -900,6 +906,7 @@ func (m *Model) rebuildFilter() {
 		}()
 	}
 	m.filtered = nil
+	m.hiddenStaleCount = 0
 	lower := text.Fold(m.filter)
 	now := m.now()
 	// Fetch read state once for the whole filter pass so IsStale can
@@ -920,6 +927,9 @@ func (m *Model) rebuildFilter() {
 		// disappear out from under them.
 		state := readState[item.ID]
 		if item.ID != m.activeID && IsStale(item, state.HasUnread, state.LastReadTS, m.staleThreshold, now) {
+			if m.filter == "" {
+				m.hiddenStaleCount++
+			}
 			continue
 		}
 		m.filtered = append(m.filtered, i)
@@ -1403,11 +1413,20 @@ func (m *Model) buildCache(width int) {
 		})
 	}
 
-	// When there are no channel items at all, render a single muted
-	// "No channels" placeholder below the Threads row + separator so the
-	// Threads row remains globally visible even on an empty workspace.
-	if len(m.items) == 0 {
-		placeholder := styles.SectionHeader.Render("No channels")
+	// When nothing is visible after filtering, render a single muted
+	// placeholder below the Threads row + separator so the Threads row
+	// remains globally visible even on an empty workspace. Distinguish
+	// "genuinely no channels" from "everything got hidden by
+	// hide_inactive_after_days" (m.filtered checked, not m.items — a
+	// staleness wipeout leaves m.items non-empty but m.filtered empty,
+	// and rendering nothing at all reads as a silent failure rather
+	// than a config effect the user can act on). See UX_AUDIT.md #1.
+	if len(m.filtered) == 0 {
+		text := "No channels"
+		if m.hiddenStaleCount > 0 {
+			text = fmt.Sprintf("%d hidden (inactive) — Ctrl+T to find", m.hiddenStaleCount)
+		}
+		placeholder := styles.SectionHeader.Render(text)
 		m.cacheRows = append(m.cacheRows, renderRow{
 			normal:   placeholder,
 			selected: placeholder,
