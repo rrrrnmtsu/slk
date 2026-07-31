@@ -294,10 +294,43 @@ type Model struct {
 // to revert to config-glob behavior.
 func (m *Model) SetSectionsProvider(p SectionsProvider) {
 	m.sectionsProvider = p
+	m.seedDefaultCollapse()
 	m.rebuildFilter()
 	m.rebuildNavPreserveCursor()
 	m.cacheValid = false
 	m.dirty()
+}
+
+// seedDefaultCollapse gives Slack-native "channels" and "recent_apps"
+// sections the same default-collapsed treatment New() gives their
+// config-mode equivalents (defaultChannelsSection / defaultAppsSection),
+// so the sidebar opens on a tidy view regardless of which mode is active
+// — Wiki Features.md documents "Channels opens collapsed" as a blanket
+// default, but until this seed step nothing ever wrote to collapseByID
+// except a manual ToggleCollapse, so Slack-mode users always saw it
+// expanded on first load (see UX_AUDIT.md #2).
+//
+// Only seeds an ID the very first time it's seen (skips any ID already a
+// key in collapseByID) so it never overwrites a user's own toggle — this
+// matters across workspace switches, since SetSectionsProvider runs again
+// each time and a returning workspace's section IDs should keep whatever
+// collapse state the user last left them in.
+func (m *Model) seedDefaultCollapse() {
+	if !m.useSlackSections() {
+		return
+	}
+	if m.collapseByID == nil {
+		m.collapseByID = map[string]bool{}
+	}
+	for _, meta := range m.sectionsProvider.OrderedSlackSections() {
+		if meta.Type != "channels" && meta.Type != "recent_apps" {
+			continue
+		}
+		if _, seen := m.collapseByID[meta.ID]; seen {
+			continue
+		}
+		m.collapseByID[meta.ID] = true
+	}
 }
 
 // SetReadStateReader installs a callback that returns the per-channel

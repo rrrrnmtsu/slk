@@ -83,6 +83,11 @@ Slack モード用の `collapseByID` を初期化するロジックがどこに�
 
 **優先度: Med**（ドキュメントと実装の乖離。DM/未読が埋もれる二次被害もある）
 
+**実装済み**: `SetSectionsProvider`から`seedDefaultCollapse()`を呼び出し、Slack-nativeモードで
+`channels`/`recent_apps`型のセクションIDが`collapseByID`に未登録（＝初見）の場合のみ`true`をシード。
+既にキーが存在する場合（ユーザーが手動トグル済み、またはワークスペース再訪問）は上書きしない。
+`go build ./... && go test ./...`全PASS確認済み。
+
 ---
 
 ## 3. 新規メッセージダイアログ (Ctrl+N) で既存グループDMを「名前で」再オープンできない
